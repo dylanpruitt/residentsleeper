@@ -487,7 +487,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.removeFocusedQueryParam()
 			}
 		}
-		if key.Matches(msg, m.keys.EditURL) && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader {
+		if key.Matches(msg, m.keys.EditURL) && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader && m.uiState != UIStateEditingURL && m.uiState != UIStateEditingQueryParam && m.uiState != UIStateAddingQueryParam {
 			m.uiState = UIStateEditingURL
 			m.textInput.SetValue(m.queryData.url)
 			m.textInput.Focus()
