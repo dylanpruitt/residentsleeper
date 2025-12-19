@@ -44,6 +44,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.TabLeft, k.UnfocusTextInput},
 		{k.TabRight, k.Help},
 		{k.SendRequest, k.Quit},
+		{k.OpenQuerySelection},
 	}
 }
 
@@ -397,10 +398,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if key.Matches(msg, m.keys.SendRequest) {
-            if m.uiState == UIStateSelectingQuery && m.currentTab != TabResponse {
-                m.uiState = UIStateWaitingForInput
+			if m.uiState == UIStateSelectingQuery && m.currentTab != TabResponse {
+				m.uiState = UIStateWaitingForInput
 				break
-            }
+			}
 			if m.uiState == UIStateEditingURL {
 				m.currentQueryData.url = m.textInput.Value()
 				m.textInput.Blur()
@@ -519,6 +520,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.uiState == UIStateSelectingQuery {
 				if m.focusedQuery < len(m.queries)-1 {
 					m.focusedQuery += 1
+					if m.queries[m.focusedQuery].responseData != nil {
+						m.viewport.SetContent(m.queries[m.focusedQuery].responseData.body)
+					} else {
+						m.viewport.SetContent("")
+					}
 					m.currentQueryData = &m.queries[m.focusedQuery]
 				}
 				return m, nil
@@ -546,6 +552,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.uiState == UIStateSelectingQuery {
 				if m.focusedQuery > 0 {
 					m.focusedQuery -= 1
+					if m.queries[m.focusedQuery].responseData != nil {
+						m.viewport.SetContent(m.queries[m.focusedQuery].responseData.body)
+					} else {
+						m.viewport.SetContent("")
+					}
 					m.currentQueryData = &m.queries[m.focusedQuery]
 				}
 				return m, nil
@@ -687,10 +698,10 @@ func (m model) View() string {
 				if m.uiState == UIStateEditingQueryParam {
 					queryTabString += m.textInput.View() + "\n"
 				} else {
-                    focusedStyle := tabOpenStyle
-                    if m.uiState == UIStateSelectingQuery {
-                        focusedStyle = responseBodyStyle
-                    }
+					focusedStyle := tabOpenStyle
+					if m.uiState == UIStateSelectingQuery {
+						focusedStyle = responseBodyStyle
+					}
 					queryTabString += focusedStyle.Render(paramString) + "\n"
 				}
 			} else {
@@ -720,10 +731,10 @@ func (m model) View() string {
 				if m.uiState == UIStateEditingHeader {
 					headerTabString += m.textInput.View() + "\n"
 				} else {
-                    focusedStyle := tabOpenStyle
-                    if m.uiState == UIStateSelectingQuery {
-                        focusedStyle = responseBodyStyle
-                    }
+					focusedStyle := tabOpenStyle
+					if m.uiState == UIStateSelectingQuery {
+						focusedStyle = responseBodyStyle
+					}
 					headerTabString += focusedStyle.Render(headerString) + "\n"
 				}
 			} else {
