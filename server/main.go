@@ -20,7 +20,6 @@ func headers(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	w.Header().Set("Content-Type", "application/json")
 	headerResponse, _ := json.Marshal(headerMap)
 	fmt.Fprintf(w, string(headerResponse))
 }
