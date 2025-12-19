@@ -677,11 +677,13 @@ func (m model) View() string {
 		responseString += tabClosedStyle.Render(" -> ")
 
 		responseStyle := responseOKStyle
-		if m.currentQueryData.responseData.status[:1] == "4" {
-			responseStyle = responseClientErrorStyle
-		}
-		if m.currentQueryData.responseData.status[:1] == "5" {
-			responseStyle = responseServerErrorStyle
+		if m.currentQueryData.responseData.status != "" {
+			if m.currentQueryData.responseData.status[:1] == "4" {
+				responseStyle = responseClientErrorStyle
+			}
+			if m.currentQueryData.responseData.status[:1] == "5" {
+				responseStyle = responseServerErrorStyle
+			}
 		}
 		responseString += responseStyle.Render(m.currentQueryData.responseData.status)
 
