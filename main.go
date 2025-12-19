@@ -21,17 +21,18 @@ import (
 )
 
 type keyMap struct {
-	TabRight         key.Binding
-	TabLeft          key.Binding
-	ListPrev         key.Binding
-	ListNext         key.Binding
-	ListAdd          key.Binding
-	ListDelete       key.Binding
-	EditURL          key.Binding
-	SendRequest      key.Binding
-	UnfocusTextInput key.Binding
-	Help             key.Binding
-	Quit             key.Binding
+	TabRight           key.Binding
+	TabLeft            key.Binding
+	ListPrev           key.Binding
+	ListNext           key.Binding
+	ListAdd            key.Binding
+	ListDelete         key.Binding
+	EditURL            key.Binding
+	SendRequest        key.Binding
+	OpenQuerySelection key.Binding
+	UnfocusTextInput   key.Binding
+	Help               key.Binding
+	Quit               key.Binding
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
@@ -48,12 +49,12 @@ func (k keyMap) FullHelp() [][]key.Binding {
 
 var keys = keyMap{
 	TabRight: key.NewBinding(
-		key.WithKeys("right", "tab"),
-		key.WithHelp("→/tab", "change open tab"),
+		key.WithKeys("right"),
+		key.WithHelp("→", "change open tab"),
 	),
 	TabLeft: key.NewBinding(
-		key.WithKeys("left", "shift+tab"),
-		key.WithHelp("←/shift+tab", "change open tab"),
+		key.WithKeys("left"),
+		key.WithHelp("←", "change open tab"),
 	),
 	ListPrev: key.NewBinding(
 		key.WithKeys("up"),
@@ -91,6 +92,10 @@ var keys = keyMap{
 		key.WithKeys("esc"),
 		key.WithHelp("esc", "unfocus text input"),
 	),
+	OpenQuerySelection: key.NewBinding(
+		key.WithKeys("tab"),
+		key.WithHelp("tab", "select query"),
+	),
 }
 
 var tabOpenStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#222222")).Background(lipgloss.Color("#ccdbdc"))
@@ -100,6 +105,8 @@ var responseBodyStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#dddddd")
 var responseOKStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#dddddd")).Background(lipgloss.Color("#0ead69"))
 var responseClientErrorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#222222")).Background(lipgloss.Color("#ffd23f"))
 var responseServerErrorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("#222222")).Background(lipgloss.Color("#cb0b0a"))
+
+const querySelectionTabWidth = 30
 
 type HTTPMethod string
 
@@ -112,6 +119,7 @@ type UIState string
 
 const (
 	UIStateWaitingForInput     UIState = "Waiting for user input"
+	UIStateSelectingQuery      UIState = "Selecting query to use"
 	UIStateEditingURL          UIState = "Editing URL to send request to"
 	UIStateAddingQueryParam    UIState = "Adding request query parameter"
 	UIStateEditingQueryParam   UIState = "Editing request query parameter"
@@ -151,6 +159,7 @@ type QueryParamData struct {
 }
 
 type QueryData struct {
+	name          string
 	url           string
 	body          []byte
 	headers       []HeaderData
@@ -160,19 +169,22 @@ type QueryData struct {
 }
 
 type model struct {
-	queryData     QueryData
-	uiState       UIState
-	tabs          []UITab
-	currentTab    UITab
-	viewport      viewport.Model
-	textarea      textarea.Model
-	help          help.Model
-	keys          keyMap
-	textInput     textinput.Model
-	focusedHeader int
-	focusedParam  int
-	screenWidth   int
-	bodyHeight    int
+	queries          []QueryData
+	currentQueryData *QueryData
+	uiState          UIState
+	tabs             []UITab
+	currentTab       UITab
+	viewport         viewport.Model
+	textarea         textarea.Model
+	help             help.Model
+	keys             keyMap
+	textInput        textinput.Model
+	focusedHeader    int
+	focusedParam     int
+	focusedQuery     int
+	screenWidth      int
+	mainTabWidth     int
+	bodyHeight       int
 }
 
 func (m model) Init() tea.Cmd {
@@ -180,22 +192,22 @@ func (m model) Init() tea.Cmd {
 }
 
 func (m *model) removeFocusedHeader() {
-	if len(m.queryData.headers) == 0 {
+	if len(m.currentQueryData.headers) == 0 {
 		return
 	}
-	m.queryData.headers = slices.Delete(m.queryData.headers, m.focusedHeader, m.focusedHeader+1)
-	if m.focusedHeader == len(m.queryData.headers) {
-		m.focusedHeader = len(m.queryData.headers) - 1
+	m.currentQueryData.headers = slices.Delete(m.currentQueryData.headers, m.focusedHeader, m.focusedHeader+1)
+	if m.focusedHeader == len(m.currentQueryData.headers) {
+		m.focusedHeader = len(m.currentQueryData.headers) - 1
 	}
 }
 
 func (m *model) removeFocusedQueryParam() {
-	if len(m.queryData.queryParams) == 0 {
+	if len(m.currentQueryData.queryParams) == 0 {
 		return
 	}
-	m.queryData.queryParams = slices.Delete(m.queryData.queryParams, m.focusedParam, m.focusedParam+1)
-	if m.focusedParam == len(m.queryData.queryParams) {
-		m.focusedParam = len(m.queryData.queryParams) - 1
+	m.currentQueryData.queryParams = slices.Delete(m.currentQueryData.queryParams, m.focusedParam, m.focusedParam+1)
+	if m.focusedParam == len(m.currentQueryData.queryParams) {
+		m.focusedParam = len(m.currentQueryData.queryParams) - 1
 	}
 }
 
@@ -224,45 +236,104 @@ func initialModel() model {
 	viewport.YPosition = 3
 	viewport.Style = responseBodyStyle
 
-	return model{
-		queryData: QueryData{
-			url:  "http://localhost:8090/hello",
-			body: []byte{},
-			headers: []HeaderData{
-				{name: "Accept", value: "application/json;v=2"},
-				{name: "Content-Type", value: "application/json"},
-				{name: "User-Agent", value: "dylanpruitt-go-client"},
-			},
-			queryParams:   []QueryParamData{},
-			requestMethod: GET,
-			responseData:  nil,
+	helloQuery := QueryData{
+		name: "mock server hello",
+		url:  "http://localhost:8090/hello",
+		body: []byte{},
+		headers: []HeaderData{
+			{name: "Accept", value: "application/json;v=2"},
+			{name: "Content-Type", value: "application/json"},
+			{name: "User-Agent", value: "dylanpruitt-go-client"},
 		},
-		uiState:       UIStateWaitingForInput,
-		tabs:          []UITab{TabQueryParams, TabHeaders, TabBody, TabResponse},
-		currentTab:    TabHeaders,
-		help:          modelHelp,
-		keys:          keys,
-		textarea:      ta,
-		viewport:      viewport,
-		textInput:     ti,
-		focusedHeader: 0,
+		queryParams:   []QueryParamData{},
+		requestMethod: GET,
+		responseData:  nil,
+	}
+
+	return model{
+		queries: []QueryData{
+			helloQuery,
+			{
+				name: "mock server headers",
+				url:  "http://localhost:8090/headers",
+				body: []byte{},
+				headers: []HeaderData{
+					{name: "Accept", value: "*/*"},
+					{name: "Content-Type", value: "application/json"},
+					{name: "User-Agent", value: "dylanpruitt-go-client"},
+				},
+				queryParams:   []QueryParamData{},
+				requestMethod: GET,
+				responseData:  nil,
+			},
+			{
+				name: "mock api call v1",
+				url:  "http://localhost:8090/user/1",
+				body: []byte{},
+				headers: []HeaderData{
+					{name: "Accept", value: "application/json;v=1"},
+					{name: "Content-Type", value: "application/json"},
+					{name: "User-Agent", value: "dylanpruitt-go-client"},
+				},
+				queryParams:   []QueryParamData{},
+				requestMethod: GET,
+				responseData:  nil,
+			},
+			{
+				name: "mock api call v2",
+				url:  "http://localhost:8090/user/1",
+				body: []byte{},
+				headers: []HeaderData{
+					{name: "Accept", value: "application/json;v=2"},
+					{name: "Content-Type", value: "application/json"},
+					{name: "User-Agent", value: "dylanpruitt-go-client"},
+				},
+				queryParams:   []QueryParamData{},
+				requestMethod: GET,
+				responseData:  nil,
+			},
+			{
+				name: "mock api call 404",
+				url:  "http://localhost:8090/user/doesntexistlmao",
+				body: []byte{},
+				headers: []HeaderData{
+					{name: "Accept", value: "application/json;v=2"},
+					{name: "Content-Type", value: "application/json"},
+					{name: "User-Agent", value: "dylanpruitt-go-client"},
+				},
+				queryParams:   []QueryParamData{},
+				requestMethod: GET,
+				responseData:  nil,
+			},
+		},
+		currentQueryData: &helloQuery,
+		uiState:          UIStateSelectingQuery,
+		tabs:             []UITab{TabQueryParams, TabHeaders, TabBody, TabResponse},
+		currentTab:       TabHeaders,
+		help:             modelHelp,
+		keys:             keys,
+		textarea:         ta,
+		viewport:         viewport,
+		textInput:        ti,
+		focusedHeader:    0,
+		focusedQuery:     0,
 	}
 }
 
 func sendRequestFromModel(m model) tea.Cmd {
 	return func() tea.Msg {
 		timeStart := time.Now()
-		req, err := http.NewRequest(string(m.queryData.requestMethod), m.queryData.url, bytes.NewBuffer(m.queryData.body))
+		req, err := http.NewRequest(string(m.currentQueryData.requestMethod), m.currentQueryData.url, bytes.NewBuffer(m.currentQueryData.body))
 		if err != nil {
 			return errMsg{err: err}
 		}
 
-		for _, header := range m.queryData.headers {
+		for _, header := range m.currentQueryData.headers {
 			req.Header.Set(header.name, header.value)
 		}
 
 		q := req.URL.Query()
-		for _, param := range m.queryData.queryParams {
+		for _, param := range m.currentQueryData.queryParams {
 			q.Add(param.name, param.value)
 		}
 		req.URL.RawQuery = q.Encode()
@@ -303,30 +374,31 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 
 	case responseMsg:
-		m.queryData.responseData = msg
-		m.viewport.SetContent(m.queryData.responseData.body)
+		m.currentQueryData.responseData = msg
+		m.viewport.SetContent(m.currentQueryData.responseData.body)
 		m.uiState = UIStateShowingResponse
 		m.currentTab = TabResponse
 		return m, nil
 
 	case errMsg:
-		m.queryData.responseData = &ResponseData{}
-		m.queryData.responseData.err = msg
+		m.currentQueryData.responseData = &ResponseData{}
+		m.currentQueryData.responseData.err = msg
 		m.uiState = UIStateShowingRequestError
 		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.screenWidth = msg.Width
+		m.mainTabWidth = m.screenWidth - querySelectionTabWidth
 		m.bodyHeight = msg.Height - 5
-		m.viewport.Width = m.screenWidth
+		m.viewport.Width = m.mainTabWidth
 		m.viewport.Height = m.bodyHeight
-		m.textarea.SetWidth(m.screenWidth)
+		m.textarea.SetWidth(m.mainTabWidth)
 		m.textarea.SetHeight(m.bodyHeight)
 
 	case tea.KeyMsg:
 		if key.Matches(msg, m.keys.SendRequest) {
 			if m.uiState == UIStateEditingURL {
-				m.queryData.url = m.textInput.Value()
+				m.currentQueryData.url = m.textInput.Value()
 				m.textInput.Blur()
 				m.uiState = UIStateWaitingForInput
 				break
@@ -334,7 +406,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.uiState == UIStateAddingHeader {
 				parsedValues := strings.Split(m.textInput.Value(), ":")
 				if len(parsedValues) == 2 {
-					m.queryData.headers = append(m.queryData.headers, HeaderData{name: parsedValues[0], value: parsedValues[1]})
+					m.currentQueryData.headers = append(m.currentQueryData.headers, HeaderData{name: parsedValues[0], value: parsedValues[1]})
 				}
 				m.textInput.Blur()
 				m.uiState = UIStateWaitingForInput
@@ -343,7 +415,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.uiState == UIStateEditingHeader {
 				parsedValues := strings.Split(m.textInput.Value(), ":")
 				if len(parsedValues) == 2 {
-					m.queryData.headers[m.focusedHeader] = HeaderData{name: parsedValues[0], value: parsedValues[1]}
+					m.currentQueryData.headers[m.focusedHeader] = HeaderData{name: parsedValues[0], value: parsedValues[1]}
 				}
 				m.textInput.Blur()
 				m.uiState = UIStateWaitingForInput
@@ -352,7 +424,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.uiState == UIStateAddingQueryParam {
 				parsedValues := strings.Split(m.textInput.Value(), ":")
 				if len(parsedValues) == 2 {
-					m.queryData.queryParams = append(m.queryData.queryParams, QueryParamData{name: parsedValues[0], value: parsedValues[1]})
+					m.currentQueryData.queryParams = append(m.currentQueryData.queryParams, QueryParamData{name: parsedValues[0], value: parsedValues[1]})
 				}
 				m.textInput.Blur()
 				m.uiState = UIStateWaitingForInput
@@ -361,28 +433,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.uiState == UIStateEditingQueryParam {
 				parsedValues := strings.Split(m.textInput.Value(), ":")
 				if len(parsedValues) == 2 {
-					m.queryData.queryParams[m.focusedParam] = QueryParamData{name: parsedValues[0], value: parsedValues[1]}
+					m.currentQueryData.queryParams[m.focusedParam] = QueryParamData{name: parsedValues[0], value: parsedValues[1]}
 				}
 				m.textInput.Blur()
 				m.uiState = UIStateWaitingForInput
 				break
 			}
 			if m.currentTab == TabHeaders {
-				if m.focusedHeader < 0 || m.focusedHeader >= len(m.queryData.headers) {
+				if m.focusedHeader < 0 || m.focusedHeader >= len(m.currentQueryData.headers) {
 					break
 				}
 				m.uiState = UIStateEditingHeader
-				focusedHeader := m.queryData.headers[m.focusedHeader]
+				focusedHeader := m.currentQueryData.headers[m.focusedHeader]
 				m.textInput.SetValue(fmt.Sprintf("%s:%s", focusedHeader.name, focusedHeader.value))
 				m.textInput.Focus()
 				break
 			}
 			if m.currentTab == TabQueryParams {
-				if m.focusedParam < 0 || m.focusedParam >= len(m.queryData.queryParams) {
+				if m.focusedParam < 0 || m.focusedParam >= len(m.currentQueryData.queryParams) {
 					break
 				}
 				m.uiState = UIStateEditingQueryParam
-				focusedParam := m.queryData.queryParams[m.focusedParam]
+				focusedParam := m.currentQueryData.queryParams[m.focusedParam]
 				m.textInput.SetValue(fmt.Sprintf("%s:%s", focusedParam.name, focusedParam.value))
 				m.textInput.Focus()
 				break
@@ -440,8 +512,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key.Matches(msg, m.keys.ListNext) {
+			if m.uiState == UIStateSelectingQuery {
+				if m.focusedQuery < len(m.queries)-1 {
+					m.focusedQuery += 1
+					m.currentQueryData = &m.queries[m.focusedQuery]
+				}
+				return m, nil
+			}
 			if m.currentTab == TabHeaders && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader {
-				if m.focusedHeader < len(m.queryData.headers)-1 {
+				if m.focusedHeader < len(m.currentQueryData.headers)-1 {
 					m.focusedHeader += 1
 				} else {
 					m.uiState = UIStateAddingHeader
@@ -450,7 +529,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if m.currentTab == TabQueryParams && m.uiState != UIStateEditingQueryParam && m.uiState != UIStateAddingQueryParam {
-				if m.focusedParam < len(m.queryData.queryParams)-1 {
+				if m.focusedParam < len(m.currentQueryData.queryParams)-1 {
 					m.focusedParam += 1
 				} else {
 					m.uiState = UIStateAddingQueryParam
@@ -460,6 +539,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key.Matches(msg, m.keys.ListPrev) {
+			if m.uiState == UIStateSelectingQuery {
+				if m.focusedQuery > 0 {
+					m.focusedQuery -= 1
+					m.currentQueryData = &m.queries[m.focusedQuery]
+				}
+				return m, nil
+			}
 			if m.currentTab == TabHeaders && m.focusedHeader > 0 &&
 				m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader {
 				m.focusedHeader -= 1
@@ -489,11 +575,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key.Matches(msg, m.keys.EditURL) && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader && m.uiState != UIStateEditingURL && m.uiState != UIStateEditingQueryParam && m.uiState != UIStateAddingQueryParam {
 			m.uiState = UIStateEditingURL
-			m.textInput.SetValue(m.queryData.url)
+			m.textInput.SetValue(m.currentQueryData.url)
 			m.textInput.Focus()
 			return m, nil
 		}
 		if key.Matches(msg, m.keys.UnfocusTextInput) {
+			if m.uiState == UIStateSelectingQuery {
+				m.uiState = UIStateWaitingForInput
+				return m, nil
+			}
 			if m.currentTab == TabBody {
 				m.textarea.Blur()
 				m.currentTab = TabHeaders
@@ -503,6 +593,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.uiState == UIStateEditingQueryParam || m.uiState == UIStateAddingQueryParam {
 				m.textInput.Blur()
 				m.uiState = UIStateWaitingForInput
+			}
+		}
+		if key.Matches(msg, m.keys.OpenQuerySelection) {
+			if m.uiState == UIStateSelectingQuery {
+				m.uiState = UIStateWaitingForInput
+				return m, nil
+			} else {
+				m.uiState = UIStateSelectingQuery
+				return m, nil
 			}
 		}
 		if key.Matches(msg, m.keys.Help) {
@@ -534,30 +633,30 @@ func (m model) View() string {
 	s := ""
 	topHeader := ""
 	responseString := ""
-	if m.uiState == UIStateShowingResponse && m.queryData.responseData != nil {
+	if (m.uiState == UIStateShowingResponse || m.uiState == UIStateSelectingQuery) && m.currentQueryData.responseData != nil {
 		responseString += tabClosedStyle.Render(" -> ")
 
 		responseStyle := responseOKStyle
-		if m.queryData.responseData.status[:1] == "4" {
+		if m.currentQueryData.responseData.status[:1] == "4" {
 			responseStyle = responseClientErrorStyle
 		}
-		if m.queryData.responseData.status[:1] == "5" {
+		if m.currentQueryData.responseData.status[:1] == "5" {
 			responseStyle = responseServerErrorStyle
 		}
-		responseString += responseStyle.Render(m.queryData.responseData.status)
+		responseString += responseStyle.Render(m.currentQueryData.responseData.status)
 
-		responseString += tabClosedStyle.Render(fmt.Sprintf(" %s", m.queryData.responseData.timeElapsed))
+		responseString += tabClosedStyle.Render(fmt.Sprintf(" %s", m.currentQueryData.responseData.timeElapsed))
 	}
-	if m.uiState == UIStateShowingRequestError && m.queryData.responseData != nil {
+	if m.uiState == UIStateShowingRequestError && m.currentQueryData.responseData != nil {
 		responseString += tabClosedStyle.Render(" -> ")
 		responseString += responseServerErrorStyle.Render("ERROR")
 	}
 
-	urlString := m.queryData.url
+	urlString := m.currentQueryData.url
 	if m.uiState == UIStateEditingURL {
 		urlString = m.textInput.View()
 	}
-	topHeader += tabClosedStyle.Render(fmt.Sprintf(" %s %s%s", m.queryData.requestMethod, urlString, responseString))
+	topHeader += tabClosedStyle.Render(fmt.Sprintf(" %s %s%s", m.currentQueryData.requestMethod, urlString, responseString))
 	topHeader += "\n"
 	for _, tab := range m.tabs {
 		if tab == m.currentTab {
@@ -566,7 +665,7 @@ func (m model) View() string {
 			topHeader += tabClosedStyle.Render(fmt.Sprintf(" %s ", tab))
 		}
 	}
-	s += lipgloss.Place(m.screenWidth, 2, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(topHeader),
+	s += lipgloss.Place(m.mainTabWidth, 2, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(topHeader),
 		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground()),
 	)
 	s += "\n"
@@ -574,11 +673,11 @@ func (m model) View() string {
 	switch m.currentTab {
 	case TabQueryParams:
 		queryTabString := ""
-		if len(m.queryData.queryParams) == 0 {
+		if len(m.currentQueryData.queryParams) == 0 {
 			queryTabString += fmt.Sprintf("(no query params will be sent, press %s/%s to add one)\n", m.keys.ListAdd.Help().Key, m.keys.ListNext.Help().Key)
 		}
 
-		for i, param := range m.queryData.queryParams {
+		for i, param := range m.currentQueryData.queryParams {
 			paramString := fmt.Sprintf(" %s: %s", param.name, param.value)
 			if i == m.focusedParam {
 				if m.uiState == UIStateEditingQueryParam {
@@ -593,16 +692,13 @@ func (m model) View() string {
 		if m.uiState == UIStateAddingQueryParam {
 			queryTabString += m.textInput.View() + "\n"
 		}
-
-		s += lipgloss.Place(m.screenWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(queryTabString),
-			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
 	case TabHeaders:
 		headerTabString := ""
-		if len(m.queryData.headers) == 0 {
+		if len(m.currentQueryData.headers) == 0 {
 			headerTabString += "(no headers will be sent)\n"
 		}
 
-		for i, header := range m.queryData.headers {
+		for i, header := range m.currentQueryData.headers {
 			headerString := ""
 			if header.name != "Authorization" {
 				headerString += fmt.Sprintf(" %s: %s", header.name, header.value)
@@ -622,10 +718,10 @@ func (m model) View() string {
 		if m.uiState == UIStateAddingHeader {
 			headerTabString += m.textInput.View() + "\n"
 		}
-		s += lipgloss.Place(m.screenWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(headerTabString),
+		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(headerTabString),
 			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
 	case TabBody:
-		s += lipgloss.Place(m.screenWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(m.textarea.View()),
+		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(m.textarea.View()),
 			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
 	case TabResponse:
 		responseTabString := ""
@@ -636,16 +732,38 @@ func (m model) View() string {
 			responseTabString = "waiting for response...\n"
 		case UIStateShowingResponse:
 			responseTabString = m.viewport.View()
+		case UIStateSelectingQuery:
+			responseTabString = m.viewport.View()
 		case UIStateShowingRequestError:
-			responseTabString = fmt.Sprintf("error occurred sending request: %s\n", m.queryData.responseData.err)
+			responseTabString = fmt.Sprintf("error occurred sending request: %s\n", m.currentQueryData.responseData.err)
 		}
-		s += lipgloss.Place(m.screenWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(responseTabString),
+		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(responseTabString),
 			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
 
 	}
-	s += lipgloss.Place(m.screenWidth, 1, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(" "+string(m.uiState)),
+	s += lipgloss.Place(m.mainTabWidth, 1, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(" "+string(m.uiState)),
 		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground())) + "\n"
 	s += m.help.View(m.keys)
+
+	// query selection tab elements all use 1 char less so I can add one as a border in the JoinHorizontal call (probably hacky, but the only way I could make it work quickly).
+	querySelectorString := lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, tabClosedStyle.Render("\nsaved queries"),
+		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground())) + "\n"
+	for i, query := range m.queries {
+		if i == m.focusedQuery {
+			focusedStyle := tabOpenStyle
+			if m.uiState != UIStateSelectingQuery {
+				focusedStyle = responseBodyStyle
+			}
+			querySelectorString += lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, focusedStyle.Render(query.name),
+				lipgloss.WithWhitespaceBackground(focusedStyle.GetBackground())) + "\n"
+		} else {
+			querySelectorString += lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, query.name) + "\n"
+		}
+	}
+	querySelector := lipgloss.Place(querySelectionTabWidth-1, m.bodyHeight+3, lipgloss.Right, lipgloss.Top, querySelectorString)
+
+	s = lipgloss.JoinHorizontal(lipgloss.Top, s, " ", querySelector)
+
 	return lipgloss.Place(m.screenWidth, m.bodyHeight+5, lipgloss.Top, lipgloss.Left, s)
 }
 
