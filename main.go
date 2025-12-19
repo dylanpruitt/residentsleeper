@@ -397,6 +397,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if key.Matches(msg, m.keys.SendRequest) {
+            if m.uiState == UIStateSelectingQuery && m.currentTab != TabResponse {
+                m.uiState = UIStateWaitingForInput
+				break
+            }
 			if m.uiState == UIStateEditingURL {
 				m.currentQueryData.url = m.textInput.Value()
 				m.textInput.Blur()
@@ -683,7 +687,11 @@ func (m model) View() string {
 				if m.uiState == UIStateEditingQueryParam {
 					queryTabString += m.textInput.View() + "\n"
 				} else {
-					queryTabString += tabOpenStyle.Render(paramString) + "\n"
+                    focusedStyle := tabOpenStyle
+                    if m.uiState == UIStateSelectingQuery {
+                        focusedStyle = responseBodyStyle
+                    }
+					queryTabString += focusedStyle.Render(paramString) + "\n"
 				}
 			} else {
 				queryTabString += paramString + "\n"
@@ -712,7 +720,11 @@ func (m model) View() string {
 				if m.uiState == UIStateEditingHeader {
 					headerTabString += m.textInput.View() + "\n"
 				} else {
-					headerTabString += tabOpenStyle.Render(headerString) + "\n"
+                    focusedStyle := tabOpenStyle
+                    if m.uiState == UIStateSelectingQuery {
+                        focusedStyle = responseBodyStyle
+                    }
+					headerTabString += focusedStyle.Render(headerString) + "\n"
 				}
 			} else {
 				headerTabString += headerString + "\n"
