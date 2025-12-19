@@ -692,6 +692,9 @@ func (m model) View() string {
 		if m.uiState == UIStateAddingQueryParam {
 			queryTabString += m.textInput.View() + "\n"
 		}
+
+		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(queryTabString),
+			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
 	case TabHeaders:
 		headerTabString := ""
 		if len(m.currentQueryData.headers) == 0 {
