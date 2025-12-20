@@ -11,4 +11,5 @@ It's intended only for learning purposes, so I don't plan to add a ton to it, bu
 ## running residentsleeper
 After cloning the repo, you can run residentsleeper using `go run main.go` from the main repo folder. You can additionally run `go run server/main.go` in a separate tab to run the bundled mock server.
 
-I've provided a few queries you can use with the mock server to demo the client's functionality.
+You'll probably need to resize the window to be bigger - I've been fixing a few funky things with UI in the default terminal window size, but parts of the UI might get cut off otherwise. Unfortunately, I don't know of any way to set the terminal width/height in bubbletea or I'd do that.  
+I've also provided a few queries you can use with the mock server to demo the client's functionality.
