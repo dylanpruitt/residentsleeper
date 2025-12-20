@@ -41,37 +41,36 @@ func (k keyMap) ShortHelp() []key.Binding {
 
 func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.TabLeft, k.UnfocusTextInput},
-		{k.TabRight, k.Help},
+		{k.TabRight, k.UnfocusTextInput},
+		{k.ListPrev, k.OpenQuerySelection},
 		{k.SendRequest, k.Quit},
-		{k.OpenQuerySelection},
 	}
 }
 
 var keys = keyMap{
 	TabRight: key.NewBinding(
 		key.WithKeys("right"),
-		key.WithHelp("→", "change open tab"),
+		key.WithHelp("←/→", "change tab"),
 	),
 	TabLeft: key.NewBinding(
 		key.WithKeys("left"),
-		key.WithHelp("←", "change open tab"),
+		key.WithHelp("←", "change tab"),
 	),
 	ListPrev: key.NewBinding(
 		key.WithKeys("up"),
-		key.WithHelp("↑", "focus previous header"),
+		key.WithHelp("↑/↓", "focus prev/next"),
 	),
 	ListNext: key.NewBinding(
 		key.WithKeys("down"),
-		key.WithHelp("↓", "focus next header"),
+		key.WithHelp("↓", "focus next"),
 	),
 	ListAdd: key.NewBinding(
 		key.WithKeys("z"),
-		key.WithHelp("z", "add new header"),
+		key.WithHelp("z", "add new"),
 	),
 	ListDelete: key.NewBinding(
 		key.WithKeys("x"),
-		key.WithHelp("x", "delete focused header"),
+		key.WithHelp("x", "delete focused"),
 	),
 	EditURL: key.NewBinding(
 		key.WithKeys("u"),
@@ -91,7 +90,7 @@ var keys = keyMap{
 	),
 	UnfocusTextInput: key.NewBinding(
 		key.WithKeys("esc"),
-		key.WithHelp("esc", "unfocus text input"),
+		key.WithHelp("esc", "unfocus input"),
 	),
 	OpenQuerySelection: key.NewBinding(
 		key.WithKeys("tab"),
@@ -126,6 +125,7 @@ const (
 	UIStateEditingQueryParam   UIState = "Editing request query parameter"
 	UIStateEditingHeader       UIState = "Editing request header"
 	UIStateAddingHeader        UIState = "Adding request header"
+	UIStateEditingBody         UIState = "Editing request body"
 	UIStateWaitingForResponse  UIState = "Sent HTTP request, waiting for HTTP response"
 	UIStateShowingResponse     UIState = "Received HTTP response"
 	UIStateShowingRequestError UIState = "Received error sending HTTP request"
@@ -415,6 +415,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.screenWidth = msg.Width
 		m.mainTabWidth = m.screenWidth - querySelectionTabWidth
+		m.help.Width = m.screenWidth
 		m.bodyHeight = msg.Height - 5
 		m.viewport.Width = m.mainTabWidth
 		m.viewport.Height = m.bodyHeight
@@ -427,11 +428,22 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.uiState = UIStateWaitingForInput
 				break
 			}
+			if m.currentTab == TabBody {
+				if m.uiState == UIStateEditingBody {
+					m.textarea.Blur()
+					m.uiState = UIStateWaitingForInput
+					return m, nil
+				} else {
+					m.textarea.Focus()
+					m.uiState = UIStateEditingBody
+					return m, nil
+				}
+			}
 			if m.uiState == UIStateEditingURL {
 				m.currentQueryData.url = m.textInput.Value()
 				m.textInput.Blur()
 				m.uiState = UIStateWaitingForInput
-				break
+				return m, nil
 			}
 			if m.uiState == UIStateAddingHeader {
 				parsedValues := strings.Split(m.textInput.Value(), ":")
@@ -489,7 +501,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textInput.Focus()
 				break
 			}
-			if !m.textarea.Focused() {
+			if m.currentTab == TabResponse {
 				m.uiState = UIStateWaitingForResponse
 				return m, sendRequestFromModel(m)
 			}
@@ -504,7 +516,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if m.currentTab == TabHeaders {
 				m.currentTab = TabBody
-				m.textarea.Focus()
 				return m, nil
 			}
 			if m.currentTab == TabBody {
@@ -532,7 +543,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.currentTab == TabBody {
 				m.currentTab = TabHeaders
 				m.textarea.Blur()
-				m.textInput.Focus()
 				return m, nil
 			}
 			if m.currentTab == TabResponse {
@@ -615,20 +625,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.removeFocusedQueryParam()
 			}
 		}
-		if key.Matches(msg, m.keys.EditURL) && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader && m.uiState != UIStateEditingURL && m.uiState != UIStateEditingQueryParam && m.uiState != UIStateAddingQueryParam {
+		if key.Matches(msg, m.keys.EditURL) && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader && m.uiState != UIStateEditingURL && m.uiState != UIStateEditingQueryParam &&
+			m.uiState != UIStateAddingQueryParam && m.uiState != UIStateEditingBody {
 			m.uiState = UIStateEditingURL
 			m.textInput.SetValue(m.currentQueryData.url)
 			m.textInput.Focus()
 			return m, nil
 		}
 		if key.Matches(msg, m.keys.UnfocusTextInput) {
-			if m.uiState == UIStateSelectingQuery {
+			if m.uiState == UIStateEditingBody {
+				m.textarea.Blur()
 				m.uiState = UIStateWaitingForInput
 				return m, nil
 			}
-			if m.currentTab == TabBody {
-				m.textarea.Blur()
-				m.currentTab = TabHeaders
+			if m.uiState == UIStateSelectingQuery {
+				m.uiState = UIStateWaitingForInput
 				return m, nil
 			}
 			if m.uiState == UIStateEditingURL || m.uiState == UIStateEditingHeader || m.uiState == UIStateAddingHeader ||
@@ -800,8 +811,7 @@ func (m model) View() string {
 
 	}
 	s += lipgloss.Place(m.mainTabWidth, 1, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(" "+string(m.uiState)),
-		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground())) + "\n"
-	s += m.help.View(m.keys)
+		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground()))
 
 	// query selection tab elements all use 1 char less so I can add one as a border in the JoinHorizontal call (probably hacky, but the only way I could make it work quickly).
 	querySelectorString := lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, tabClosedStyle.Render("\nsaved queries"),
@@ -818,9 +828,10 @@ func (m model) View() string {
 			querySelectorString += lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, query.name) + "\n"
 		}
 	}
-	querySelector := lipgloss.Place(querySelectionTabWidth-1, m.bodyHeight+3, lipgloss.Right, lipgloss.Top, querySelectorString)
+	querySelector := lipgloss.Place(querySelectionTabWidth-1, m.bodyHeight, lipgloss.Right, lipgloss.Top, querySelectorString)
 
 	s = lipgloss.JoinHorizontal(lipgloss.Top, s, " ", querySelector)
+	s = lipgloss.JoinVertical(lipgloss.Left, s, m.help.View(m.keys))
 
 	return lipgloss.Place(m.screenWidth, m.bodyHeight+5, lipgloss.Top, lipgloss.Left, s)
 }
