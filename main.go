@@ -216,15 +216,6 @@ func initialModel() model {
 	modelHelp := help.New()
 	modelHelp.ShowAll = true
 
-	ta := textarea.New()
-	ta.SetWidth(120)
-	ta.SetHeight(20)
-	ta.FocusedStyle.Text = responseBodyStyle
-	ta.BlurredStyle.Base = responseBodyStyle
-	ta.FocusedStyle.Base = responseBodyStyle
-	ta.Placeholder = "Enter request body here"
-	ta.SetValue("{}\n")
-
 	ti := textinput.New()
 	ti.Placeholder = "Enter header (ex. Accept:application/json;v=2)"
 	ti.CharLimit = 150
@@ -250,6 +241,15 @@ func initialModel() model {
 		requestMethod: GET,
 		responseData:  nil,
 	}
+
+	ta := textarea.New()
+	ta.SetWidth(120)
+	ta.SetHeight(20)
+	ta.FocusedStyle.Text = responseBodyStyle
+	ta.BlurredStyle.Base = responseBodyStyle
+	ta.FocusedStyle.Base = responseBodyStyle
+	ta.Placeholder = "Enter request body here"
+	ta.SetValue(string(helloQuery.body))
 
 	return model{
 		queries: []QueryData{
@@ -545,6 +545,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.uiState == UIStateSelectingQuery {
 				if m.focusedQuery < len(m.queries)-1 {
 					m.focusedQuery += 1
+					m.textarea.SetValue(string(m.queries[m.focusedQuery].body))
 					if m.queries[m.focusedQuery].responseData != nil {
 						m.viewport.SetContent(m.queries[m.focusedQuery].responseData.body)
 					} else {
@@ -577,6 +578,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.uiState == UIStateSelectingQuery {
 				if m.focusedQuery > 0 {
 					m.focusedQuery -= 1
+					m.textarea.SetValue(string(m.queries[m.focusedQuery].body))
 					if m.queries[m.focusedQuery].responseData != nil {
 						m.viewport.SetContent(m.queries[m.focusedQuery].responseData.body)
 					} else {
@@ -661,6 +663,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	m.textarea, cmd = m.textarea.Update(msg)
+	if m.currentTab == TabBody && m.textarea.Focused() {
+		m.currentQueryData.body = []byte(m.textarea.Value())
+	}
 	cmds = append(cmds, cmd)
 
 	m.textInput, cmd = m.textInput.Update(msg)
