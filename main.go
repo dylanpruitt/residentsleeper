@@ -380,7 +380,7 @@ func sendRequestFromModel(m model) tea.Cmd {
 		ARTIFICIAL_LATENCY := time.Second
 		time.Sleep(ARTIFICIAL_LATENCY)
 
-		timeElapsedString := time.Since(timeStart).String()
+		timeElapsedString := time.Since(timeStart).Round(time.Millisecond).String()
 
 		return responseMsg(&ResponseData{
 			status:      resp.Status,
