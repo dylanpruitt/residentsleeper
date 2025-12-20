@@ -495,7 +495,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key.Matches(msg, m.keys.TabRight) {
-			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader {
+			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader || (m.currentTab == TabBody && m.textarea.Focused()) {
 				break
 			}
 			if m.currentTab == TabQueryParams {
@@ -518,7 +518,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key.Matches(msg, m.keys.TabLeft) {
-			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader {
+			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader || (m.currentTab == TabBody && m.textarea.Focused()) {
 				break
 			}
 			if m.currentTab == TabQueryParams {
