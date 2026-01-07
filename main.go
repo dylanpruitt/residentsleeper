@@ -248,6 +248,7 @@ func initialModel() model {
 	ta.FocusedStyle.Text = responseBodyStyle
 	ta.BlurredStyle.Base = responseBodyStyle
 	ta.FocusedStyle.Base = responseBodyStyle
+	ta.FocusedStyle.CursorLine = tabOpenStyle
 	ta.Placeholder = "Enter request body here"
 	ta.SetValue(string(helloQuery.body))
 
@@ -507,7 +508,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key.Matches(msg, m.keys.TabRight) {
-			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader || (m.currentTab == TabBody && m.textarea.Focused()) {
+			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader || m.uiState == UIStateEditingBody {
 				break
 			}
 			if m.currentTab == TabQueryParams {
@@ -529,7 +530,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key.Matches(msg, m.keys.TabLeft) {
-			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader || (m.currentTab == TabBody && m.textarea.Focused()) {
+			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader || m.uiState == UIStateEditingBody {
 				break
 			}
 			if m.currentTab == TabQueryParams {
@@ -661,7 +662,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.help.ShowAll = !m.help.ShowAll
 		}
 		if key.Matches(msg, m.keys.Quit) {
-			if m.currentTab == TabBody || m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader ||
+			if m.uiState == UIStateEditingBody || m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader ||
 				m.uiState == UIStateEditingQueryParam || m.uiState == UIStateAddingQueryParam {
 				break
 			}
