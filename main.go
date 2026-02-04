@@ -28,7 +28,7 @@ type keyMap struct {
 	ListAdd            key.Binding
 	ListDelete         key.Binding
 	EditURL            key.Binding
-	Submit        key.Binding
+	Submit             key.Binding
 	OpenQuerySelection key.Binding
 	UnfocusTextInput   key.Binding
 	Help               key.Binding
@@ -468,8 +468,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.uiState = UIStateEditingHeader
 				focusedHeader := m.currentQueryData.headers[m.focusedHeader]
-				m.textInput.SetValue(fmt.Sprintf("%s:%s", focusedHeader.name, focusedHeader.value))
-				m.textInput.Focus()
+				m.focusTextInputAndSetValue(fmt.Sprintf("%s:%s", focusedHeader.name, focusedHeader.value))
 				break
 			}
 			if m.currentTab == TabQueryParams {
@@ -478,8 +477,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.uiState = UIStateEditingQueryParam
 				focusedParam := m.currentQueryData.queryParams[m.focusedParam]
-				m.textInput.SetValue(fmt.Sprintf("%s:%s", focusedParam.name, focusedParam.value))
-				m.textInput.Focus()
+				m.focusTextInputAndSetValue(fmt.Sprintf("%s:%s", focusedParam.name, focusedParam.value))
 				break
 			}
 			if m.currentTab == TabResponse {
@@ -545,8 +543,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focusedHeader += 1
 				} else {
 					m.uiState = UIStateAddingHeader
-					m.textInput.SetValue("")
-					m.textInput.Focus()
+					m.focusTextInputAndSetValue("")
 				}
 			}
 			if m.currentTab == TabQueryParams && !userIsEditingSomething(m) {
@@ -554,8 +551,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.focusedParam += 1
 				} else {
 					m.uiState = UIStateAddingQueryParam
-					m.textInput.SetValue("")
-					m.textInput.Focus()
+					m.focusTextInputAndSetValue("")
 				}
 			}
 		}
@@ -583,13 +579,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.ListAdd) {
 			if m.currentTab == TabHeaders && !userIsEditingSomething(m) {
 				m.uiState = UIStateAddingHeader
-				m.textInput.SetValue("")
-				m.textInput.Focus()
+				m.focusTextInputAndSetValue("")
 			}
 			if m.currentTab == TabQueryParams && !userIsEditingSomething(m) {
 				m.uiState = UIStateAddingQueryParam
-				m.textInput.SetValue("")
-				m.textInput.Focus()
+				m.focusTextInputAndSetValue("")
 			}
 		}
 		if key.Matches(msg, m.keys.ListDelete) {
@@ -602,8 +596,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if key.Matches(msg, m.keys.EditURL) && !userIsEditingSomething(m) {
 			m.uiState = UIStateEditingURL
-			m.textInput.SetValue(m.currentQueryData.url)
-			m.textInput.Focus()
+			m.focusTextInputAndSetValue(m.currentQueryData.url)
 			return m, nil
 		}
 		if key.Matches(msg, m.keys.UnfocusTextInput) {
@@ -664,6 +657,12 @@ func userIsEditingSomething(m model) bool {
 		m.uiState == UIStateAddingQueryParam ||
 		m.uiState == UIStateEditingQueryParam ||
 		m.uiState == UIStateEditingBody
+}
+
+func (m *model) focusTextInputAndSetValue(s string) {
+	m.textInput.SetValue(s)
+	m.textInput.Focus()
+	m.textInput.SetCursor(0)
 }
 
 func (m *model) removeFocusedHeader() {
