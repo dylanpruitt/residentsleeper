@@ -488,7 +488,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key.Matches(msg, m.keys.TabRight) {
-			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader || m.uiState == UIStateEditingBody {
+			// if user is editing a textinput/textarea L/R arrows have different functionality, so break and use that instead
+			if userIsEditingSomething(m) {
 				break
 			}
 			if m.currentTab == TabQueryParams {
@@ -510,7 +511,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		if key.Matches(msg, m.keys.TabLeft) {
-			if m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader || m.uiState == UIStateEditingBody {
+			if userIsEditingSomething(m) {
 				break
 			}
 			if m.currentTab == TabQueryParams {
@@ -546,7 +547,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			if m.currentTab == TabHeaders && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader {
+			if m.currentTab == TabHeaders && !userIsEditingSomething(m) {
 				if m.focusedHeader < len(m.currentQueryData.headers)-1 {
 					m.focusedHeader += 1
 				} else {
@@ -555,7 +556,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.textInput.Focus()
 				}
 			}
-			if m.currentTab == TabQueryParams && m.uiState != UIStateEditingQueryParam && m.uiState != UIStateAddingQueryParam {
+			if m.currentTab == TabQueryParams && !userIsEditingSomething(m) {
 				if m.focusedParam < len(m.currentQueryData.queryParams)-1 {
 					m.focusedParam += 1
 				} else {
@@ -579,35 +580,34 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				return m, nil
 			}
-			if m.currentTab == TabHeaders && m.focusedHeader > 0 &&
-				m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader {
+			if m.currentTab == TabHeaders && m.focusedHeader > 0 && !userIsEditingSomething(m) {
 				m.focusedHeader -= 1
 			}
-			if m.currentTab == TabQueryParams && m.focusedParam > 0 &&
-				m.uiState != UIStateEditingQueryParam && m.uiState != UIStateAddingQueryParam {
+			if m.currentTab == TabQueryParams && m.focusedParam > 0 && !userIsEditingSomething(m) {
 				m.focusedParam -= 1
 			}
 		}
-		if key.Matches(msg, m.keys.ListAdd) && m.currentTab == TabHeaders && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader {
-			m.uiState = UIStateAddingHeader
-			m.textInput.SetValue("")
-			m.textInput.Focus()
-		}
-		if key.Matches(msg, m.keys.ListAdd) && m.currentTab == TabQueryParams && m.uiState != UIStateEditingQueryParam && m.uiState != UIStateAddingQueryParam {
-			m.uiState = UIStateAddingQueryParam
-			m.textInput.SetValue("")
-			m.textInput.Focus()
+		if key.Matches(msg, m.keys.ListAdd) {
+			if m.currentTab == TabHeaders && !userIsEditingSomething(m) {
+				m.uiState = UIStateAddingHeader
+				m.textInput.SetValue("")
+				m.textInput.Focus()
+			}
+			if m.currentTab == TabQueryParams && !userIsEditingSomething(m) {
+				m.uiState = UIStateAddingQueryParam
+				m.textInput.SetValue("")
+				m.textInput.Focus()
+			}
 		}
 		if key.Matches(msg, m.keys.ListDelete) {
-			if m.currentTab == TabHeaders && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader {
+			if m.currentTab == TabHeaders && !userIsEditingSomething(m) {
 				m.removeFocusedHeader()
 			}
-			if m.currentTab == TabQueryParams && m.uiState != UIStateEditingQueryParam && m.uiState != UIStateAddingQueryParam {
+			if m.currentTab == TabQueryParams && !userIsEditingSomething(m) {
 				m.removeFocusedQueryParam()
 			}
 		}
-		if key.Matches(msg, m.keys.EditURL) && m.uiState != UIStateEditingHeader && m.uiState != UIStateAddingHeader && m.uiState != UIStateEditingURL && m.uiState != UIStateEditingQueryParam &&
-			m.uiState != UIStateAddingQueryParam && m.uiState != UIStateEditingBody {
+		if key.Matches(msg, m.keys.EditURL) && !userIsEditingSomething(m) {
 			m.uiState = UIStateEditingURL
 			m.textInput.SetValue(m.currentQueryData.url)
 			m.textInput.Focus()
@@ -641,11 +641,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.Help) {
 			m.help.ShowAll = !m.help.ShowAll
 		}
-		if key.Matches(msg, m.keys.Quit) {
-			if m.uiState == UIStateEditingBody || m.uiState == UIStateEditingURL || m.uiState == UIStateAddingHeader || m.uiState == UIStateEditingHeader ||
-				m.uiState == UIStateEditingQueryParam || m.uiState == UIStateAddingQueryParam {
-				break
-			}
+		if key.Matches(msg, m.keys.Quit) && !userIsEditingSomething(m) {
 			m.uiState = UIStateUserQuit
 			return m, tea.Quit
 		}
@@ -664,6 +660,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+
+func userIsEditingSomething(m model) bool {
+	return m.uiState == UIStateEditingURL ||
+		m.uiState == UIStateAddingHeader ||
+		m.uiState == UIStateEditingHeader ||
+		m.uiState == UIStateAddingQueryParam ||
+		m.uiState == UIStateEditingQueryParam ||
+		m.uiState == UIStateEditingBody
 }
 
 func (m *model) removeFocusedHeader() {
@@ -687,9 +692,9 @@ func (m *model) removeFocusedQueryParam() {
 }
 
 func (m model) View() string {
-    // render top bar (REST method/URL/tab headers)
+	// render top bar (REST method/URL/tab headers)
 	s := buildTopBarString(m)
-    // render currently open tab
+	// render currently open tab
 	switch m.currentTab {
 	case TabQueryParams:
 		s += buildQueryTabString(m)
@@ -701,18 +706,18 @@ func (m model) View() string {
 	case TabResponse:
 		s += buildResponseTabString(m)
 	}
-    // render UI state
+	// render UI state
 	s += lipgloss.Place(m.mainTabWidth, 1, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(" "+string(m.uiState)),
 		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground()))
-    // adds a one-column "border" between main tab/sidebar
+	// adds a one-column "border" between main tab/sidebar
 	s = lipgloss.JoinHorizontal(lipgloss.Top, s, " ", buildQuerySelectorSidebar(m))
-    // render help component at the bottom of the terminal
+	// render help component at the bottom of the terminal
 	s = lipgloss.JoinVertical(lipgloss.Left, s, m.help.View(m.keys))
 	return lipgloss.Place(m.screenWidth, m.bodyHeight+5, lipgloss.Top, lipgloss.Left, s)
 }
 
 func buildTopBarString(m model) string {
-    topHeader := ""
+	topHeader := ""
 	responseString := ""
 	if (m.uiState == UIStateShowingResponse || m.uiState == UIStateSelectingQuery) && m.currentQueryData.responseData != nil {
 		responseString += tabClosedStyle.Render(" -> ")
@@ -754,7 +759,7 @@ func buildTopBarString(m model) string {
 }
 
 func buildQueryTabString(m model) string {
-    queryTabString := ""
+	queryTabString := ""
 	if len(m.currentQueryData.queryParams) == 0 {
 		queryTabString += fmt.Sprintf("(no query params will be sent, press %s/%s to add one)\n", m.keys.ListAdd.Help().Key, m.keys.ListNext.Help().Key)
 	}
@@ -784,7 +789,7 @@ func buildQueryTabString(m model) string {
 }
 
 func buildHeaderTabString(m model) string {
-    headerTabString := ""
+	headerTabString := ""
 	if len(m.currentQueryData.headers) == 0 {
 		headerTabString += "(no headers will be sent)\n"
 	}
@@ -818,7 +823,7 @@ func buildHeaderTabString(m model) string {
 }
 
 func buildResponseTabString(m model) string {
-    responseTabString := ""
+	responseTabString := ""
 	switch m.uiState {
 	case UIStateWaitingForInput:
 		responseTabString = "response not yet sent\n"
@@ -836,8 +841,8 @@ func buildResponseTabString(m model) string {
 }
 
 func buildQuerySelectorSidebar(m model) string {
-    // query selection tab elements all use 1 char less so I can add one as a border in the JoinHorizontal call in View. It's a bit hacky but I probably won't spend a lot of time chasing down
-    // how to do this the "right way".
+	// query selection tab elements all use 1 char less so I can add one as a border in the JoinHorizontal call in View. It's a bit hacky but I probably won't spend a lot of time chasing down
+	// how to do this the "right way".
 	querySelectorString := lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, tabClosedStyle.Render("\nsaved queries"),
 		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground())) + "\n"
 	for i, query := range m.queries {
@@ -852,7 +857,7 @@ func buildQuerySelectorSidebar(m model) string {
 			querySelectorString += lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, query.name) + "\n"
 		}
 	}
-	return lipgloss.Place(querySelectionTabWidth-1, m.bodyHeight, lipgloss.Right, lipgloss.Top, querySelectorString)   
+	return lipgloss.Place(querySelectionTabWidth-1, m.bodyHeight, lipgloss.Right, lipgloss.Top, querySelectorString)
 }
 
 type responseMsg *ResponseData
