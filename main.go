@@ -687,8 +687,32 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m model) View() string {
-	s := ""
-	topHeader := ""
+    // render top bar (REST method/URL/tab headers)
+	s := buildTopBarString(m)
+    // render currently open tab
+	switch m.currentTab {
+	case TabQueryParams:
+		s += buildQueryTabString(m)
+	case TabHeaders:
+		s += buildHeaderTabString(m)
+	case TabBody:
+		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(m.textarea.View()),
+			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
+	case TabResponse:
+		s += buildResponseTabString(m)
+	}
+    // render UI state
+	s += lipgloss.Place(m.mainTabWidth, 1, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(" "+string(m.uiState)),
+		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground()))
+    // adds a one-column "border" between main tab/sidebar
+	s = lipgloss.JoinHorizontal(lipgloss.Top, s, " ", buildQuerySelectorSidebar(m))
+    // render help component at the bottom of the terminal
+	s = lipgloss.JoinVertical(lipgloss.Left, s, m.help.View(m.keys))
+	return lipgloss.Place(m.screenWidth, m.bodyHeight+5, lipgloss.Top, lipgloss.Left, s)
+}
+
+func buildTopBarString(m model) string {
+    topHeader := ""
 	responseString := ""
 	if (m.uiState == UIStateShowingResponse || m.uiState == UIStateSelectingQuery) && m.currentQueryData.responseData != nil {
 		responseString += tabClosedStyle.Render(" -> ")
@@ -724,97 +748,96 @@ func (m model) View() string {
 			topHeader += tabClosedStyle.Render(fmt.Sprintf(" %s ", tab))
 		}
 	}
-	s += lipgloss.Place(m.mainTabWidth, 2, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(topHeader),
+	return lipgloss.Place(m.mainTabWidth, 2, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(topHeader),
 		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground()),
-	)
-	s += "\n"
+	) + "\n"
+}
 
-	switch m.currentTab {
-	case TabQueryParams:
-		queryTabString := ""
-		if len(m.currentQueryData.queryParams) == 0 {
-			queryTabString += fmt.Sprintf("(no query params will be sent, press %s/%s to add one)\n", m.keys.ListAdd.Help().Key, m.keys.ListNext.Help().Key)
-		}
-
-		for i, param := range m.currentQueryData.queryParams {
-			paramString := fmt.Sprintf(" %s: %s", param.name, param.value)
-			if i == m.focusedParam {
-				if m.uiState == UIStateEditingQueryParam {
-					queryTabString += m.textInput.View() + "\n"
-				} else {
-					focusedStyle := tabOpenStyle
-					if m.uiState == UIStateSelectingQuery {
-						focusedStyle = responseBodyStyle
-					}
-					queryTabString += focusedStyle.Render(paramString) + "\n"
-				}
-			} else {
-				queryTabString += paramString + "\n"
-			}
-		}
-		if m.uiState == UIStateAddingQueryParam {
-			queryTabString += m.textInput.View() + "\n"
-		}
-
-		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(queryTabString),
-			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
-	case TabHeaders:
-		headerTabString := ""
-		if len(m.currentQueryData.headers) == 0 {
-			headerTabString += "(no headers will be sent)\n"
-		}
-
-		for i, header := range m.currentQueryData.headers {
-			headerString := ""
-			if header.name != "Authorization" {
-				headerString += fmt.Sprintf(" %s: %s", header.name, header.value)
-			} else {
-				headerString += " Authorization: Bearer ********"
-			}
-			if i == m.focusedHeader {
-				if m.uiState == UIStateEditingHeader {
-					headerTabString += m.textInput.View() + "\n"
-				} else {
-					focusedStyle := tabOpenStyle
-					if m.uiState == UIStateSelectingQuery {
-						focusedStyle = responseBodyStyle
-					}
-					headerTabString += focusedStyle.Render(headerString) + "\n"
-				}
-			} else {
-				headerTabString += headerString + "\n"
-			}
-		}
-		if m.uiState == UIStateAddingHeader {
-			headerTabString += m.textInput.View() + "\n"
-		}
-		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(headerTabString),
-			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
-	case TabBody:
-		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(m.textarea.View()),
-			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
-	case TabResponse:
-		responseTabString := ""
-		switch m.uiState {
-		case UIStateWaitingForInput:
-			responseTabString = "response not yet sent\n"
-		case UIStateWaitingForResponse:
-			responseTabString = "waiting for response...\n"
-		case UIStateShowingResponse:
-			responseTabString = m.viewport.View()
-		case UIStateSelectingQuery:
-			responseTabString = m.viewport.View()
-		case UIStateShowingRequestError:
-			responseTabString = fmt.Sprintf("error occurred sending request: %s\n", m.currentQueryData.responseData.err)
-		}
-		s += lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(responseTabString),
-			lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
-
+func buildQueryTabString(m model) string {
+    queryTabString := ""
+	if len(m.currentQueryData.queryParams) == 0 {
+		queryTabString += fmt.Sprintf("(no query params will be sent, press %s/%s to add one)\n", m.keys.ListAdd.Help().Key, m.keys.ListNext.Help().Key)
 	}
-	s += lipgloss.Place(m.mainTabWidth, 1, lipgloss.Left, lipgloss.Top, tabClosedStyle.Render(" "+string(m.uiState)),
-		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground()))
 
-	// query selection tab elements all use 1 char less so I can add one as a border in the JoinHorizontal call (probably hacky, but the only way I could make it work quickly).
+	for i, param := range m.currentQueryData.queryParams {
+		paramString := fmt.Sprintf(" %s: %s", param.name, param.value)
+		if i == m.focusedParam {
+			if m.uiState == UIStateEditingQueryParam {
+				queryTabString += m.textInput.View() + "\n"
+			} else {
+				focusedStyle := tabOpenStyle
+				if m.uiState == UIStateSelectingQuery {
+					focusedStyle = responseBodyStyle
+				}
+				queryTabString += focusedStyle.Render(paramString) + "\n"
+			}
+		} else {
+			queryTabString += paramString + "\n"
+		}
+	}
+	if m.uiState == UIStateAddingQueryParam {
+		queryTabString += m.textInput.View() + "\n"
+	}
+
+	return lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(queryTabString),
+		lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
+}
+
+func buildHeaderTabString(m model) string {
+    headerTabString := ""
+	if len(m.currentQueryData.headers) == 0 {
+		headerTabString += "(no headers will be sent)\n"
+	}
+
+	for i, header := range m.currentQueryData.headers {
+		headerString := ""
+		if header.name != "Authorization" {
+			headerString += fmt.Sprintf(" %s: %s", header.name, header.value)
+		} else {
+			headerString += " Authorization: Bearer ********"
+		}
+		if i == m.focusedHeader {
+			if m.uiState == UIStateEditingHeader {
+				headerTabString += m.textInput.View() + "\n"
+			} else {
+				focusedStyle := tabOpenStyle
+				if m.uiState == UIStateSelectingQuery {
+					focusedStyle = responseBodyStyle
+				}
+				headerTabString += focusedStyle.Render(headerString) + "\n"
+			}
+		} else {
+			headerTabString += headerString + "\n"
+		}
+	}
+	if m.uiState == UIStateAddingHeader {
+		headerTabString += m.textInput.View() + "\n"
+	}
+	return lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(headerTabString),
+		lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
+}
+
+func buildResponseTabString(m model) string {
+    responseTabString := ""
+	switch m.uiState {
+	case UIStateWaitingForInput:
+		responseTabString = "response not yet sent\n"
+	case UIStateWaitingForResponse:
+		responseTabString = "waiting for response...\n"
+	case UIStateShowingResponse:
+		responseTabString = m.viewport.View()
+	case UIStateSelectingQuery:
+		responseTabString = m.viewport.View()
+	case UIStateShowingRequestError:
+		responseTabString = fmt.Sprintf("error occurred sending request: %s\n", m.currentQueryData.responseData.err)
+	}
+	return lipgloss.Place(m.mainTabWidth, m.bodyHeight, lipgloss.Left, lipgloss.Top, responseBodyStyle.Render(responseTabString),
+		lipgloss.WithWhitespaceBackground(responseBodyStyle.GetBackground())) + "\n"
+}
+
+func buildQuerySelectorSidebar(m model) string {
+    // query selection tab elements all use 1 char less so I can add one as a border in the JoinHorizontal call in View. It's a bit hacky but I probably won't spend a lot of time chasing down
+    // how to do this the "right way".
 	querySelectorString := lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, tabClosedStyle.Render("\nsaved queries"),
 		lipgloss.WithWhitespaceBackground(tabClosedStyle.GetBackground())) + "\n"
 	for i, query := range m.queries {
@@ -829,12 +852,7 @@ func (m model) View() string {
 			querySelectorString += lipgloss.Place(querySelectionTabWidth-1, 1, lipgloss.Right, lipgloss.Top, query.name) + "\n"
 		}
 	}
-	querySelector := lipgloss.Place(querySelectionTabWidth-1, m.bodyHeight, lipgloss.Right, lipgloss.Top, querySelectorString)
-
-	s = lipgloss.JoinHorizontal(lipgloss.Top, s, " ", querySelector)
-	s = lipgloss.JoinVertical(lipgloss.Left, s, m.help.View(m.keys))
-
-	return lipgloss.Place(m.screenWidth, m.bodyHeight+5, lipgloss.Top, lipgloss.Left, s)
+	return lipgloss.Place(querySelectionTabWidth-1, m.bodyHeight, lipgloss.Right, lipgloss.Top, querySelectorString)   
 }
 
 type responseMsg *ResponseData
