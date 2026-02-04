@@ -28,7 +28,7 @@ type keyMap struct {
 	ListAdd            key.Binding
 	ListDelete         key.Binding
 	EditURL            key.Binding
-	SendRequest        key.Binding
+	Submit        key.Binding
 	OpenQuerySelection key.Binding
 	UnfocusTextInput   key.Binding
 	Help               key.Binding
@@ -43,7 +43,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabRight, k.UnfocusTextInput},
 		{k.ListPrev, k.OpenQuerySelection},
-		{k.SendRequest, k.Quit},
+		{k.Submit, k.Quit},
 	}
 }
 
@@ -76,9 +76,9 @@ var keys = keyMap{
 		key.WithKeys("u"),
 		key.WithHelp("u", "edit url"),
 	),
-	SendRequest: key.NewBinding(
+	Submit: key.NewBinding(
 		key.WithKeys("enter"),
-		key.WithHelp("enter", "send request"),
+		key.WithHelp("enter", "submit"),
 	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),
@@ -404,7 +404,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.textarea.SetHeight(m.bodyHeight)
 
 	case tea.KeyMsg:
-		if key.Matches(msg, m.keys.SendRequest) {
+		if key.Matches(msg, m.keys.Submit) {
 			if m.uiState == UIStateSelectingQuery && m.currentTab != TabResponse {
 				m.uiState = UIStateWaitingForInput
 				break
