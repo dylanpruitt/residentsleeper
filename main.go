@@ -487,11 +487,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, sendRequestFromModel(m)
 			}
 		}
-		if key.Matches(msg, m.keys.TabRight) {
-			// if user is editing a textinput/textarea L/R arrows have different functionality, so break and use that instead
-			if userIsEditingSomething(m) {
-				break
-			}
+		if key.Matches(msg, m.keys.TabRight) && !userIsEditingSomething(m) {
 			if m.currentTab == TabQueryParams {
 				m.currentTab = TabHeaders
 				return m, nil
@@ -510,10 +506,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
-		if key.Matches(msg, m.keys.TabLeft) {
-			if userIsEditingSomething(m) {
-				break
-			}
+		if key.Matches(msg, m.keys.TabLeft) && !userIsEditingSomething(m) {
 			if m.currentTab == TabQueryParams {
 				m.currentTab = TabResponse
 				return m, nil
@@ -647,6 +640,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// The viewport (shows response body), textarea (where users edit the request body), and textinput (used for all other text inputs)
+	// all have their own Update functions that handle things like moving the cursor; calling them makes sure those components respond to user input.
 	m.viewport, cmd = m.viewport.Update(msg)
 	cmds = append(cmds, cmd)
 
