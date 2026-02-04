@@ -192,26 +192,6 @@ func (m model) Init() tea.Cmd {
 	return tea.SetWindowTitle("residentsleeper")
 }
 
-func (m *model) removeFocusedHeader() {
-	if len(m.currentQueryData.headers) == 0 {
-		return
-	}
-	m.currentQueryData.headers = slices.Delete(m.currentQueryData.headers, m.focusedHeader, m.focusedHeader+1)
-	if m.focusedHeader == len(m.currentQueryData.headers) {
-		m.focusedHeader = len(m.currentQueryData.headers) - 1
-	}
-}
-
-func (m *model) removeFocusedQueryParam() {
-	if len(m.currentQueryData.queryParams) == 0 {
-		return
-	}
-	m.currentQueryData.queryParams = slices.Delete(m.currentQueryData.queryParams, m.focusedParam, m.focusedParam+1)
-	if m.focusedParam == len(m.currentQueryData.queryParams) {
-		m.focusedParam = len(m.currentQueryData.queryParams) - 1
-	}
-}
-
 func initialModel() model {
 	modelHelp := help.New()
 	modelHelp.ShowAll = true
@@ -684,6 +664,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+
+func (m *model) removeFocusedHeader() {
+	if len(m.currentQueryData.headers) == 0 {
+		return
+	}
+	m.currentQueryData.headers = slices.Delete(m.currentQueryData.headers, m.focusedHeader, m.focusedHeader+1)
+	if m.focusedHeader == len(m.currentQueryData.headers) {
+		m.focusedHeader = len(m.currentQueryData.headers) - 1
+	}
+}
+
+func (m *model) removeFocusedQueryParam() {
+	if len(m.currentQueryData.queryParams) == 0 {
+		return
+	}
+	m.currentQueryData.queryParams = slices.Delete(m.currentQueryData.queryParams, m.focusedParam, m.focusedParam+1)
+	if m.focusedParam == len(m.currentQueryData.queryParams) {
+		m.focusedParam = len(m.currentQueryData.queryParams) - 1
+	}
 }
 
 func (m model) View() string {
