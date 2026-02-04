@@ -9,4 +9,4 @@ After cloning the repo, you can run residentsleeper using `go run main.go` from 
 You'll probably need to resize the window to be bigger - I've been fixing a few funky things with UI in the default terminal window size, but parts of the UI might get cut off otherwise. Unfortunately, I don't know of any way to set the terminal width/height in bubbletea or I'd do that.  
 I've also provided a few queries you can use with the mock server to demo the client's functionality.
 
-When creating a header or query, it should be in a `name:value` format. Anything that doesn't follow that format will not be saved after editing it.
+When creating a header or query parameter, it should be in a `name:value` format. Anything that doesn't follow that format will not be saved after editing it.
