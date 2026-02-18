@@ -327,50 +327,11 @@ func initialModel() model {
 	}
 }
 
-func sendRequestFromModel(m model) tea.Cmd {
-	return func() tea.Msg {
-		timeStart := time.Now()
-		req, err := http.NewRequest(string(m.currentQueryData.requestMethod), m.currentQueryData.url, bytes.NewBuffer(m.currentQueryData.body))
-		if err != nil {
-			return errMsg{err: err}
-		}
+type responseMsg *ResponseData
 
-		for _, header := range m.currentQueryData.headers {
-			req.Header.Set(header.name, header.value)
-		}
+type errMsg struct{ err error }
 
-		q := req.URL.Query()
-		for _, param := range m.currentQueryData.queryParams {
-			q.Add(param.name, param.value)
-		}
-		req.URL.RawQuery = q.Encode()
-
-		client := &http.Client{}
-		resp, err := client.Do(req)
-		if err != nil {
-			return errMsg{err: err}
-		}
-		defer resp.Body.Close()
-
-		responseBodyByteSlice, _ := io.ReadAll(resp.Body)
-		var responseBytesBuffer bytes.Buffer
-		json.Indent(&responseBytesBuffer, responseBodyByteSlice, "", "\t")
-		prettyPrintedResponseJSON := responseBytesBuffer.String()
-
-		// simulates delay from downstream server so UI changes are slow enough to watch
-		ARTIFICIAL_LATENCY := time.Second
-		time.Sleep(ARTIFICIAL_LATENCY)
-
-		timeElapsedString := time.Since(timeStart).Round(time.Millisecond).String()
-
-		return responseMsg(&ResponseData{
-			status:      resp.Status,
-			header:      resp.Header,
-			body:        prettyPrintedResponseJSON,
-			timeElapsed: timeElapsedString,
-		})
-	}
-}
+func (e errMsg) Error() string { return e.err.Error() }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var (
@@ -469,6 +430,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.uiState = UIStateEditingHeader
 				focusedHeader := m.currentQueryData.headers[m.focusedHeader]
 				m.focusTextInputAndSetValue(fmt.Sprintf("%s:%s", focusedHeader.name, focusedHeader.value))
+				m.textInput.Placeholder = "Enter header (ex. Accept:application/json;v=2)"
 				break
 			}
 			if m.currentTab == TabQueryParams {
@@ -478,6 +440,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.uiState = UIStateEditingQueryParam
 				focusedParam := m.currentQueryData.queryParams[m.focusedParam]
 				m.focusTextInputAndSetValue(fmt.Sprintf("%s:%s", focusedParam.name, focusedParam.value))
+				m.textInput.Placeholder = "Enter query parameter (ex: myID:2)"
 				break
 			}
 			if m.currentTab == TabResponse {
@@ -544,6 +507,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.uiState = UIStateAddingHeader
 					m.focusTextInputAndSetValue("")
+					m.textInput.Placeholder = "Enter header (ex. Accept:application/json;v=2)"
 				}
 			}
 			if m.currentTab == TabQueryParams && !userIsEditingSomething(m) {
@@ -552,6 +516,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.uiState = UIStateAddingQueryParam
 					m.focusTextInputAndSetValue("")
+					m.textInput.Placeholder = "Enter query parameter (ex: myID:2)"
 				}
 			}
 		}
@@ -597,6 +562,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.EditURL) && !userIsEditingSomething(m) {
 			m.uiState = UIStateEditingURL
 			m.focusTextInputAndSetValue(m.currentQueryData.url)
+			m.textInput.Placeholder = "Enter URL to send request to"
 			return m, nil
 		}
 		if key.Matches(msg, m.keys.UnfocusTextInput) {
@@ -648,6 +614,51 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	cmds = append(cmds, cmd)
 
 	return m, tea.Batch(cmds...)
+}
+
+func sendRequestFromModel(m model) tea.Cmd {
+	return func() tea.Msg {
+		timeStart := time.Now()
+		req, err := http.NewRequest(string(m.currentQueryData.requestMethod), m.currentQueryData.url, bytes.NewBuffer(m.currentQueryData.body))
+		if err != nil {
+			return errMsg{err: err}
+		}
+
+		for _, header := range m.currentQueryData.headers {
+			req.Header.Set(header.name, header.value)
+		}
+
+		q := req.URL.Query()
+		for _, param := range m.currentQueryData.queryParams {
+			q.Add(param.name, param.value)
+		}
+		req.URL.RawQuery = q.Encode()
+
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			return errMsg{err: err}
+		}
+		defer resp.Body.Close()
+
+		responseBodyByteSlice, _ := io.ReadAll(resp.Body)
+		var responseBytesBuffer bytes.Buffer
+		json.Indent(&responseBytesBuffer, responseBodyByteSlice, "", "\t")
+		prettyPrintedResponseJSON := responseBytesBuffer.String()
+
+		// simulates delay from downstream server so UI changes are slow enough to watch
+		ARTIFICIAL_LATENCY := time.Second
+		time.Sleep(ARTIFICIAL_LATENCY)
+
+		timeElapsedString := time.Since(timeStart).Round(time.Millisecond).String()
+
+		return responseMsg(&ResponseData{
+			status:      resp.Status,
+			header:      resp.Header,
+			body:        prettyPrintedResponseJSON,
+			timeElapsed: timeElapsedString,
+		})
+	}
 }
 
 func userIsEditingSomething(m model) bool {
@@ -853,12 +864,6 @@ func buildQuerySelectorSidebar(m model) string {
 	}
 	return lipgloss.Place(querySelectionTabWidth-1, m.bodyHeight, lipgloss.Right, lipgloss.Top, querySelectorString)
 }
-
-type responseMsg *ResponseData
-
-type errMsg struct{ err error }
-
-func (e errMsg) Error() string { return e.err.Error() }
 
 func main() {
 	if _, err := tea.NewProgram(initialModel()).Run(); err != nil {
