@@ -211,7 +211,7 @@ func initialModel() model {
 	helloQuery := QueryData{
 		name: "mock server hello",
 		url:  "http://localhost:8090/hello",
-		body: []byte{},
+		body: []byte(" "),
 		headers: []HeaderData{
 			{name: "Accept", value: "application/json;v=2"},
 			{name: "Content-Type", value: "application/json"},
@@ -238,7 +238,7 @@ func initialModel() model {
 			{
 				name: "mock server headers",
 				url:  "http://localhost:8090/headers",
-				body: []byte{},
+				body: []byte(" "),
 				headers: []HeaderData{
 					{name: "Accept", value: "*/*"},
 					{name: "Content-Type", value: "application/json"},
@@ -251,7 +251,7 @@ func initialModel() model {
 			{
 				name: "mock api call v1",
 				url:  "http://localhost:8090/user/1",
-				body: []byte{},
+				body: []byte(" "),
 				headers: []HeaderData{
 					{name: "Accept", value: "application/json;v=1"},
 					{name: "Content-Type", value: "application/json"},
@@ -264,7 +264,7 @@ func initialModel() model {
 			{
 				name: "mock api call v2",
 				url:  "http://localhost:8090/user/1",
-				body: []byte{},
+				body: []byte(" "),
 				headers: []HeaderData{
 					{name: "Accept", value: "application/json;v=2"},
 					{name: "Content-Type", value: "application/json"},
@@ -277,7 +277,7 @@ func initialModel() model {
 			{
 				name: "mock api call 404",
 				url:  "http://localhost:8090/user/doesntexistlmao",
-				body: []byte{},
+				body: []byte(" "),
 				headers: []HeaderData{
 					{name: "Accept", value: "application/json;v=2"},
 					{name: "Content-Type", value: "application/json"},
@@ -302,7 +302,7 @@ func initialModel() model {
 			{
 				name: "mock api get all users",
 				url:  "http://localhost:8090/users",
-				body: []byte{},
+				body: []byte(" "),
 				headers: []HeaderData{
 					{name: "Accept", value: "*/*"},
 					{name: "Content-Type", value: "application/json"},
@@ -315,7 +315,7 @@ func initialModel() model {
 			{
 				name: "long response",
 				url:  "http://localhost:8090/long-response",
-				body: []byte{},
+				body: []byte(" "),
 				headers: []HeaderData{
 					{name: "Accept", value: "*/*"},
 					{name: "User-Agent", value: "dylanpruitt-go-client"},
