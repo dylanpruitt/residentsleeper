@@ -312,6 +312,18 @@ func initialModel() model {
 				requestMethod: GET,
 				responseData:  nil,
 			},
+			{
+				name: "long response",
+				url:  "http://localhost:8090/long-response",
+				body: []byte{},
+				headers: []HeaderData{
+					{name: "Accept", value: "*/*"},
+					{name: "User-Agent", value: "dylanpruitt-go-client"},
+				},
+				queryParams:   []QueryParamData{},
+				requestMethod: GET,
+				responseData:  nil,
+			},
 		},
 		currentQueryData: &helloQuery,
 		uiState:          UIStateSelectingQuery,
@@ -371,11 +383,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 			if m.currentTab == TabBody {
-				if m.uiState == UIStateEditingBody {
-					m.textarea.Blur()
-					m.uiState = UIStateWaitingForInput
-					return m, nil
-				} else {
+				if m.uiState != UIStateEditingBody {
 					m.textarea.Focus()
 					m.uiState = UIStateEditingBody
 					return m, nil
@@ -642,9 +650,15 @@ func sendRequestFromModel(m model) tea.Cmd {
 		defer resp.Body.Close()
 
 		responseBodyByteSlice, _ := io.ReadAll(resp.Body)
-		var responseBytesBuffer bytes.Buffer
-		json.Indent(&responseBytesBuffer, responseBodyByteSlice, "", "\t")
-		prettyPrintedResponseJSON := responseBytesBuffer.String()
+		contentType := resp.Header.Get("Content-Type")
+		var responseBodyString string
+		if contentType == "application/json" {
+			var responseBytesBuffer bytes.Buffer
+			json.Indent(&responseBytesBuffer, responseBodyByteSlice, "", "\t")
+			responseBodyString = responseBytesBuffer.String()
+		} else {
+			responseBodyString = string(responseBodyByteSlice)
+		}
 
 		// simulates delay from downstream server so UI changes are slow enough to watch
 		ARTIFICIAL_LATENCY := time.Second
@@ -655,7 +669,7 @@ func sendRequestFromModel(m model) tea.Cmd {
 		return responseMsg(&ResponseData{
 			status:      resp.Status,
 			header:      resp.Header,
-			body:        prettyPrintedResponseJSON,
+			body:        responseBodyString,
 			timeElapsed: timeElapsedString,
 		})
 	}
